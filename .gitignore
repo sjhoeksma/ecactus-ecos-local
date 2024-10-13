@@ -4,3 +4,7 @@
 /.esphome/
 /secrets.yaml
 .DS_Store
+__pycache__/
+.vscode/
+components/modbus_controller/todo.md
+ecactus copy.yaml
