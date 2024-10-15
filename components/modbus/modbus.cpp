@@ -75,20 +75,20 @@ namespace esphome
     void Modbus::reset(uint8_t address)
     {
       // Check for a hanging request
-      if (this->role == ModbusRole::SNIFFER)
+      if (this->role == ModbusRole::Multi)
       {
         if (address > Modbus::MAX_MODBUS_ADDRESS_COUNT)
         {
           for (uint8_t idx = 0; idx <= Modbus::MAX_MODBUS_ADDRESS_COUNT; idx++)
           {
-            this->sniffer_mode[idx] = SnifferMode::UNKOWN;
+            this->sniffer_mode[idx] = ModbusMode::UNKOWN;
             this->sniffer_count[idx] = 0;
             this->last_modbus_byte_ = millis();
             for (auto *device : this->devices_)
             {
               if (device->address_ == idx)
               {
-                device->reset_command_queue();
+                device->clear_command_queue();
                 break;
               }
             }
@@ -96,14 +96,14 @@ namespace esphome
         }
         else
         {
-          this->sniffer_mode[address] = SnifferMode::UNKOWN;
+          this->sniffer_mode[address] = ModbusMode::UNKOWN;
           this->sniffer_count[address] = 0;
           this->last_modbus_byte_ = millis();
           for (auto *device : this->devices_)
           {
             if (device->address_ == address)
             {
-              device->reset_command_queue();
+              device->clear_command_queue();
               break;
             }
           }
@@ -156,23 +156,23 @@ namespace esphome
       else
       {
 
-        if (this->role == ModbusRole::SNIFFER && retry_count == 1)
+        if (this->role == ModbusRole::Multi && retry_count == 1)
         {
           this->reset(address);
         }
 
-        if (this->role == ModbusRole::SNIFFER && this->sniffer_count[address] == 0 &&
-            (this->sniffer_mode[address] == SnifferMode::UNKOWN || this->sniffer_mode[address] == SnifferMode::MASTER))
+        if (this->role == ModbusRole::Multi && this->sniffer_count[address] == 0 &&
+            (this->sniffer_mode[address] == ModbusMode::UNKOWN || this->sniffer_mode[address] == ModbusMode::MASTER))
         {
           if ((function_code == 0x3 || function_code == 0x4))
           {
-            this->sniffer_mode[address] = SnifferMode::SERVER;
+            this->sniffer_mode[address] = ModbusMode::SERVER;
             ESP_LOGD(TAG, "Modbus sniffer changing to SERVER for device address=%d and function %02X", address, function_code);
           }
         }
 
         // data starts at 2 and length is 4 for read registers commands
-        if ((this->role == ModbusRole::SERVER || this->sniffer_mode[address] == SnifferMode::SERVER) &&
+        if ((this->role == ModbusRole::SERVER || this->sniffer_mode[address] == ModbusMode::SERVER) &&
             (function_code == 0x3 || function_code == 0x4))
         {
           data_offset = 2;
@@ -214,10 +214,10 @@ namespace esphome
           else
           {
             ESP_LOGW(TAG, "Modbus CRC Check failed! %02X!=%02X", computed_crc, remote_crc);
-            if (this->role == ModbusRole::SNIFFER && this->sniffer_mode[address] == SnifferMode::CLIENT)
+            if (this->role == ModbusRole::Multi && this->sniffer_mode[address] == ModbusMode::CLIENT)
             {
               this->sniffer_count[address] = 0;
-              this->sniffer_mode[address] = SnifferMode::UNKOWN;
+              this->sniffer_mode[address] = ModbusMode::UNKOWN;
             }
             return false; // Will clear
           }
@@ -244,15 +244,15 @@ namespace esphome
             }
           }
 
-          else if (this->role == ModbusRole::SNIFFER)
+          else if (this->role == ModbusRole::Multi)
           {
             ESP_LOGD(TAG, "Got Modbus frame from device address=%d, mode %d, raw: %s", address, this->sniffer_mode[address], format_hex_pretty(data).c_str());
-            if (this->sniffer_mode[address] == SnifferMode::SERVER && (function_code == 0x3 || function_code == 0x4))
+            if (this->sniffer_mode[address] == ModbusMode::SERVER && (function_code == 0x3 || function_code == 0x4))
             {
               this->sniffer_count[address] = device->on_modbus_sniffer_registers(function_code,
                                                                                  uint16_t(data[1]) | (uint16_t(data[0]) << 8),
                                                                                  uint16_t(data[3]) | (uint16_t(data[2]) << 8));
-              this->sniffer_mode[address] = SnifferMode::CLIENT;
+              this->sniffer_mode[address] = ModbusMode::CLIENT;
               ESP_LOGD(TAG, "Modbus sniffer changing to CLIENT for device address=%d, duration(%d)ms", address, millis() - this->last_command_master_);
             }
             else
@@ -262,7 +262,7 @@ namespace esphome
                 this->sniffer_count[address]--;
               if (this->sniffer_count[address] == 0)
               {
-                this->sniffer_mode[address] = SnifferMode::MASTER;
+                this->sniffer_mode[address] = ModbusMode::MASTER;
                 this->last_command_master_ = millis();
                 ESP_LOGD(TAG, "Modbus sniffer changing to MASTER for device address=%d", address);
               }
@@ -318,8 +318,8 @@ namespace esphome
     {
       static const size_t MAX_VALUES = 128;
 
-      if (this->role == ModbusRole::SNIFFER &&
-          (this->sniffer_mode[address] != SnifferMode::MASTER && this->sniffer_mode[address] != SnifferMode::UNKOWN))
+      if (this->role == ModbusRole::Multi &&
+          (this->sniffer_mode[address] != ModbusMode::MASTER && this->sniffer_mode[address] != ModbusMode::UNKOWN))
       {
         ESP_LOGE(TAG, "Sniffer should only send data in MASTER mode");
         return;
@@ -337,7 +337,7 @@ namespace esphome
       data.push_back(address);
       data.push_back(function_code);
       if (this->role == ModbusRole::CLIENT ||
-          (this->role == ModbusRole::SNIFFER && this->sniffer_mode[address] == SnifferMode::MASTER))
+          (this->role == ModbusRole::Multi && this->sniffer_mode[address] == ModbusMode::MASTER))
       {
         data.push_back(start_address >> 8);
         data.push_back(start_address >> 0);
@@ -377,9 +377,9 @@ namespace esphome
       if (this->flow_control_pin_ != nullptr)
         this->flow_control_pin_->digital_write(false);
       waiting_for_response = address;
-      if (this->role == ModbusRole::SNIFFER)
+      if (this->role == ModbusRole::Multi)
       {
-        this->sniffer_mode[address] = SnifferMode::CLIENT;
+        this->sniffer_mode[address] = ModbusMode::CLIENT;
         this->sniffer_count[address]++;
       }
       last_send_ = millis();

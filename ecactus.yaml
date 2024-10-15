@@ -76,7 +76,7 @@ uart:
 modbus:
     uart_id: rs485_uart
     id: modbus_uart_1
-    role: sniffer
+    role: multi
 
 modbus_controller:
   - id: modbus_addr_1
@@ -97,6 +97,7 @@ modbus_controller:
     #command_throttle: 10ms
     #offline_skip_updates: 10
     max_cmd_retries: 1
+    mode: sniffer
 
 # #define variables
 # globals:

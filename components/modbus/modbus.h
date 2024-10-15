@@ -14,10 +14,10 @@ namespace esphome
     {
       CLIENT,
       SERVER,
-      SNIFFER
+      MULTI
     };
 
-    enum class SnifferMode
+    enum class ModbusMode
     {
       UNKOWN,
       SERVER,
@@ -65,7 +65,7 @@ namespace esphome
       }
 
       ModbusRole role;
-      SnifferMode sniffer_mode[MAX_MODBUS_ADDRESS_COUNT + 1];
+      ModbusMode sniffer_mode[MAX_MODBUS_ADDRESS_COUNT + 1];
 
     protected:
       GPIOPin *flow_control_pin_{nullptr};
@@ -92,10 +92,9 @@ namespace esphome
       virtual void on_modbus_data(const std::vector<uint8_t> &data) = 0;
       virtual void on_modbus_error(uint8_t function_code, uint8_t exception_code) {}
       virtual void on_modbus_read_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) {};
-      virtual uint16_t on_modbus_sniffer_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) { return 0; };
-      /// called when we want to know is this address is sniffer register
-      virtual bool is_modbus_sniffer_register(uint16_t start_address) { return false; };
-      virtual void reset_command_queue();
+      virtual uint16_t on_modbus_mode_server(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) { return 0; };
+      virtual bool  is_modbus_server_register(uint16_t start_address) { return false; };
+      virtual void clear_command_queue();
       void send(uint8_t function, uint16_t start_address, uint16_t number_of_entities, uint8_t payload_len = 0,
                 const uint8_t *payload = nullptr)
       {

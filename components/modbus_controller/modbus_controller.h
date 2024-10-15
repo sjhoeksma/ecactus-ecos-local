@@ -18,6 +18,11 @@ namespace esphome
 
     class ModbusController;
 
+    enum class ControllerMode {
+      DEFAULT,
+      SNIFFER
+    }
+
     enum class ModbusFunctionCode
     {
       CUSTOM = 0x00,
@@ -491,11 +496,12 @@ namespace esphome
       /// called when a modbus request (function code 3 or 4) was parsed without errors
       void on_modbus_read_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) final;
       /// called when a modbus sniffer request (function code 3 or 4) was parsed without errors
-      uint16_t on_modbus_sniffer_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) final;
+      uint16_t on_modbus_mode_server(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) final;
       /// called when we want to know is this address is sniffer register
-      bool is_modbus_sniffer_register(uint16_t start_address) final;
+      bool  is_modbus_server_register(uint16_t start_address) final;
       /// reset the commandque
-      void reset_command_queue() final { command_queue_.clear(); }
+      void clear_command_queue() final { command_queue_.clear(); }
+
 
       /// default delegate called by process_modbus_data when a response has retrieved from the incoming queue
       void on_register_data(ModbusRegisterType register_type, uint16_t start_address, const std::vector<uint8_t> &data);
@@ -524,6 +530,8 @@ namespace esphome
       void set_max_cmd_retries(uint8_t max_cmd_retries) { this->max_cmd_retries_ = max_cmd_retries; }
       /// get how many times a command will be (re)sent if no response is received
       uint8_t get_max_cmd_retries() { return this->max_cmd_retries_; }
+      /// set the controller mode
+      void set_controller_mode(ControllerMode mode) {this->controller_mode_ = mode}
 
     protected:
       /// parse sensormap_ and create range of sequential addresses
@@ -560,6 +568,8 @@ namespace esphome
       uint16_t offline_skip_updates_;
       /// How many times we will retry a command if we get no response
       uint8_t max_cmd_retries_{4};
+      // The current Controller mode of the     
+      ControllerMode controller_mode_;
       CallbackManager<void(int, int)> command_sent_callback_{};
     };
 

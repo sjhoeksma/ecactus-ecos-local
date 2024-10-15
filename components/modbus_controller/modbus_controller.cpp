@@ -11,7 +11,7 @@ namespace esphome
 
     void ModbusController::setup()
     {
-      if (this->parent_->role == modbus::ModbusRole::SNIFFER)
+      if (this->parent_->role == modbus::ModbusRole::Multi)
       {
         this->allow_duplicate_commands_ = true;
       }
@@ -33,9 +33,9 @@ namespace esphome
         auto &command = this->command_queue_.front();
 
         if (command->register_type != ModbusRegisterType::SNIFFER ||
-            (this->parent_->role == modbus::ModbusRole::SNIFFER &&
-             this->parent_->sniffer_mode[this->address_] != modbus::SnifferMode::MASTER &&
-             this->parent_->sniffer_mode[this->address_] != modbus::SnifferMode::UNKOWN))
+            (this->parent_->role == modbus::ModbusRole::Multi &&
+             this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::MASTER &&
+             this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::UNKOWN))
         {
           return (!this->command_queue_.empty()); // Skip
         }
@@ -193,7 +193,7 @@ namespace esphome
     }
 
     /// called when we want to know is this address is sniffer register
-    bool ModbusController::is_modbus_sniffer_register(uint16_t start_address)
+    bool ModbusController:: is_modbus_server_register(uint16_t start_address)
     {
       auto reg_it = find_if(begin(register_ranges_), end(register_ranges_), [=](RegisterRange const &r)
                             { return (r.start_address == start_address && r.register_type == ModbusRegisterType::SNIFFER); });
@@ -205,7 +205,7 @@ namespace esphome
     {
       ESP_LOGD(TAG, "Modbus Sniffer detected for device=%d, start_address : 0x%X(%d) - for %u registers", this->address_, start_address, start_address, number_of_registers);
 
-      if (!this->is_modbus_sniffer_register(start_address))
+      if (!this-> is_modbus_server_register(start_address))
       {
         ESP_LOGI(TAG, "Register for device=%d, start_address : 0x%X , count=%d not found!", this->address_, start_address, number_of_registers);
         if (number_of_registers > 1)

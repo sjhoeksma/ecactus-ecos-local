@@ -39,6 +39,7 @@ AUTO_LOAD = ["modbus"]
 
 CONF_READ_LAMBDA = "read_lambda"
 CONF_SERVER_REGISTERS = "server_registers"
+CONF_CONTROLLER_MODE = "mode"
 MULTI_CONF = True
 
 modbus_controller_ns = cg.esphome_ns.namespace("modbus_controller")
@@ -64,12 +65,19 @@ MODBUS_FUNCTION_CODE = {
 
 ModbusRegisterType_ns = modbus_controller_ns.namespace("ModbusRegisterType")
 ModbusRegisterType = ModbusRegisterType_ns.enum("ModbusRegisterType")
+ControlerModeType = ModbusRegisterType_ns.enum("ControllerMode")
 
 MODBUS_WRITE_REGISTER_TYPE = {
     "custom": ModbusRegisterType.CUSTOM,
     "coil": ModbusRegisterType.COIL,
     "holding": ModbusRegisterType.HOLDING,
 }
+
+CONTROLLER_MODE_TYPE = {
+    "default": ControlerModeType.DEFAULT,
+    "sniffer": ControlerModeType.SNIFFER,
+}
+
 
 MODBUS_REGISTER_TYPE = {
     **MODBUS_WRITE_REGISTER_TYPE,
@@ -148,6 +156,9 @@ CONFIG_SCHEMA = cv.All(
                     ),
                 }
             ),
+            cv.Optional(
+                CONF_CONTROLLER_MODE, default="default"
+            ),
         }
     )
     .extend(cv.polling_component_schema("60s"))
@@ -179,6 +190,7 @@ ModbusItemBaseSchema = cv.Schema(
 
 
 def validate_modbus_register(config):
+    
     if CONF_CUSTOM_COMMAND not in config and CONF_ADDRESS not in config:
         raise cv.Invalid(
             f" {CONF_ADDRESS} is a required property if '{CONF_CUSTOM_COMMAND}:' isn't used"
@@ -265,6 +277,7 @@ async def to_code(config):
     cg.add(var.set_command_throttle(config[CONF_COMMAND_THROTTLE]))
     cg.add(var.set_max_cmd_retries(config[CONF_MAX_CMD_RETRIES]))
     cg.add(var.set_offline_skip_updates(config[CONF_OFFLINE_SKIP_UPDATES]))
+    cg.add(var.set_controller_mode(config[CONF_CONTROLLER_MODE]))
     if CONF_SERVER_REGISTERS in config:
         for server_register in config[CONF_SERVER_REGISTERS]:
             cg.add(
