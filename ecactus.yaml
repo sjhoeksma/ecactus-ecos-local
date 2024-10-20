@@ -10,7 +10,7 @@ esphome:
   friendly_name: ${friendly_name}
   name_add_mac_suffix: false
   project:
-    name: esphome.web
+    name: esphome.ecactus
     version: '1.0'
 
 # Specify the board used, I use an ESP32-s3 
@@ -76,21 +76,21 @@ uart:
 modbus:
     uart_id: rs485_uart
     id: modbus_uart_1
-    role: multi
+    role: shared
 
 modbus_controller:
   - id: modbus_addr_1
-    address: 0x1 # the Modbus device address of the Slave
+    address: 0x1 # the Modbus device address of the master
     #setup_priority: -100 #Priority very late
     modbus_id: modbus_uart_1
     update_interval: 5s
-    command_throttle: 0ms
+    #command_throttle: 10ms
     #offline_skip_updates: 10
-    #max_cmd_retries: 2
+    #max_cmd_retries: 4
     #allow_duplicate_commands : true
 
   - id: modbus_addr_2
-    address: 0x2 # the Modbus device address of the Master
+    address: 0x2 # the Modbus device address of the slave
     #setup_priority: -100
     modbus_id: modbus_uart_1
     update_interval: 5s
@@ -129,7 +129,25 @@ switch:
     name: "Restart Monitor"
 
 sensor:
-  #Global Sensors
+#--- GLOBAL Sensors -----------------------------------
+  - platform: template
+    name: "# PV power"
+    id: pv_power_sensor
+    icon: mdi:solar-power-variant-outline
+    unit_of_measurement: "kW"
+    accuracy_decimals: 2
+    filters:
+      - multiply: 0.001
+
+  - platform: template
+    name: "# Home power"
+    id: home_power_sensor
+    icon: mdi:home-lightning-bolt-outline
+    unit_of_measurement: "kW"
+    accuracy_decimals: 2
+    filters:
+      - multiply: 0.001
+   
   - platform: template
     name: "#1 PV power"
     id: pv_power_sensor_1
@@ -138,7 +156,7 @@ sensor:
     accuracy_decimals: 2
     filters:
       - multiply: 0.001
-
+ 
   - platform: template
     name: "#1 Home power"
     id: home_power_sensor_1
@@ -147,7 +165,7 @@ sensor:
     accuracy_decimals: 2
     filters:
       - multiply: 0.001
-
+ 
   - platform: template
     name: "#2 PV power"
     id: pv_power_sensor_2
@@ -156,7 +174,7 @@ sensor:
     accuracy_decimals: 2
     filters:
       - multiply: 0.001
-
+ 
   - platform: template
     name: "#2 Home power"
     id: home_power_sensor_2
@@ -165,20 +183,92 @@ sensor:
     accuracy_decimals: 2
     filters:
       - multiply: 0.001
+ 
 
+#---SENSORS MODBUS_ADDR 1 -----------------------------------
 
-# Sniffer, we default used 0xFFFF as sniffer address for not found adresses
   # - platform: modbus_controller
-  #   modbus_controller_id: modbus_addr_2
-  #   name: "SNIFFER"
-  #   id: sniffer
-  #   register_type: sniffer
-  #   address: 0xFFFF
+  #   modbus_controller_id: modbus_addr_1
+  #   name: "#1 SOC"
+  #   id: batt_scoc_sensor_1
+  #   icon: mdi:battery-charging-medium
+  #   register_type: read
+  #   address: 36155
+  #   unit_of_measurement: "%"
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: modbus_addr_1
+  #   name: "#1 PV1 power"
+  #   id: pv1_power_sensor_1
+  #   icon: mdi:solar-power-variant-outline
+  #   register_type: read
+  #   address: 36112
+  #   unit_of_measurement: "kW"
+  #   accuracy_decimals: 2
+  #   filters:
+  #     - multiply: 0.001
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: modbus_addr_1
+  #   name: "#1 PV2 power"
+  #   id: pv2_power_sensor_1
+  #   icon: mdi:solar-power-variant-outline
+  #   register_type: read
+  #   address: 36113
+  #   unit_of_measurement: "kW"
+  #   accuracy_decimals: 2
+  #   filters:
+  #     - multiply: 0.001
+  #   on_value:
+  #     - sensor.template.publish:
+  #         id: pv_power_sensor_1
+  #         state: !lambda 'return (id(pv2_power_sensor_1).state + id(pv1_power_sensor_1).state);' # calculate PV Power
+  #     - sensor.template.publish:
+  #         id: pv_power_sensor
+  #         state: !lambda 'return (id(pv2_power_sensor_1).state + id(pv1_power_sensor_1).state + id(pv2_power_sensor_2).state + id(pv1_power_sensor_2).state);' # calculate PV Power
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: modbus_addr_1
+  #   name: "#1 Grid power"
+  #   id: grid_power_sensor_1
+  #   icon: mdi:transmission-tower
+  #   register_type: read
+  #   address: 36131
+  #   unit_of_measurement: "kW"
+  #   register_count: 2
+  #   value_type: S_DWORD
+  #   accuracy_decimals: 2
+  #   filters:
+  #     - multiply: 0.001
+
+  # - platform: modbus_controller
+  #   modbus_controller_id: modbus_addr_1
+  #   name: "#1 Battery power"
+  #   id: battery_power_sensor_1
+  #   icon: mdi:home-lightning-bolt-outline
+  #   register_type: read
+  #   address: 36138
+  #   unit_of_measurement: "kW"
+  #   register_count: 2
+  #   value_type: S_DWORD
+  #   accuracy_decimals: 2
+  #   filters:
+  #     - multiply: 0.001
+  #   on_value:
+  #     - sensor.template.publish:
+  #         id: home_power_sensor_1
+  #         state: !lambda 'return (id(battery_power_sensor_1).state + id(pv_power_sensor_1).state + id(grid_power_sensor_1).state);' # calculate Home Power
+  #     - sensor.template.publish:
+  #         id: home_power_sensor
+  #         state: !lambda 'return (id(battery_power_sensor_1).state + id(pv_power_sensor_1).state + id(grid_power_sensor_1).state +  id(battery_power_sensor_2).state + id(pv_power_sensor_2).state + id(grid_power_sensor_2).state);' # calculate Home Power
+
+
+#--- SENSORS MODBUS_ADDR 2 -----------------------------------
 
   - platform: modbus_controller
     modbus_controller_id: modbus_addr_2
-    name: "SOC"
-    id: batt_scoc_sensor
+    name: "#2 SOC"
+    id: batt_scoc_sensor_2
     icon: mdi:battery-charging-medium
     register_type: sniffer
     address: 36155
@@ -186,7 +276,7 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: modbus_addr_2
-    name: "48003"
+    name: "#2 48003"
     id: batt_48003
     #icon: mdi:battery-charging-medium
     register_type: sniffer
@@ -195,24 +285,85 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: modbus_addr_2
-    name: "37500"
+    name: "#2 37500"
     id: batt_37500
     register_type: sniffer
     address: 37500
 
   - platform: modbus_controller
     modbus_controller_id: modbus_addr_2
-    name: "37501"
+    name: "#2 37501"
     id: batt_37501
     register_type: sniffer
     address: 37501
 
   - platform: modbus_controller
     modbus_controller_id: modbus_addr_2
-    name: "37502"
+    name: "#2 37502"
     id: batt_37502
     register_type: sniffer
     address: 37502
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 PV1 power"
+    id: pv1_power_sensor_2
+    icon: mdi:solar-power-variant-outline
+    register_type: read
+    address: 36112
+    unit_of_measurement: "kW"
+    accuracy_decimals: 2
+    filters:
+      - multiply: 0.001
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 PV2 power"
+    id: pv2_power_sensor_2
+    icon: mdi:solar-power-variant-outline
+    register_type: read
+    address: 36113
+    unit_of_measurement: "kW"
+    accuracy_decimals: 2
+    filters:
+      - multiply: 0.001
+    on_value:
+      - sensor.template.publish:
+          id: pv_power_sensor_2
+          state: !lambda 'return (id(pv2_power_sensor_2).state + id(pv1_power_sensor_2).state);' # calculate PV Power
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 Grid power"
+    id: grid_power_sensor_2
+    icon: mdi:transmission-tower
+    register_type: read
+    address: 36131
+    register_count: 2
+    value_type: S_DWORD
+    unit_of_measurement: "kW"
+    accuracy_decimals: 2
+    filters:
+      - multiply: 0.001
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 Battery power"
+    id: battery_power_sensor_2
+    icon: mdi:home-lightning-bolt-outline
+    register_type: read
+    address: 36138
+    register_count: 2
+    value_type: S_DWORD
+    unit_of_measurement: "kW"
+    accuracy_decimals: 2
+    filters:
+      - multiply: 0.001
+    on_value:
+      - sensor.template.publish:
+          id: home_power_sensor_2
+          state: !lambda 'return (id(battery_power_sensor_2).state + id(pv_power_sensor_2).state + id(grid_power_sensor_2).state);' # calculate Home Power
+
 
   # - platform: modbus_controller
   #   modbus_controller_id: modbus_addr_2

@@ -30,7 +30,7 @@ ModbusRole = modbus_ns.ModbusRole.enum("ModbusRole")
 MODBUS_ROLES = {
     "client": ModbusRole.CLIENT,
     "server": ModbusRole.SERVER,
-    "multi": ModbusRole.MULTI,
+    "shared": ModbusRole.SHARED,
 }
 
 CONFIG_SCHEMA = (

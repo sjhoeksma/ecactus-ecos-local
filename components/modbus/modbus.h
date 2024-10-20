@@ -14,7 +14,7 @@ namespace esphome
     {
       CLIENT,
       SERVER,
-      MULTI
+      SHARED
     };
 
     enum class ModbusMode
@@ -22,7 +22,8 @@ namespace esphome
       UNKOWN,
       SERVER,
       CLIENT,
-      MASTER
+      MASTER,
+      SNIFFER,
     };
 
     class ModbusDevice;
@@ -31,6 +32,7 @@ namespace esphome
     {
     public:
       static const uint8_t MAX_MODBUS_ADDRESS_COUNT = 10; // Last =10
+      static const uint8_t MAX_COMMAND_DURATION = 50;     // ms
       Modbus() = default;
 
       void setup() override;
@@ -42,10 +44,12 @@ namespace esphome
       void register_device(ModbusDevice *device) { this->devices_.push_back(device); }
 
       float get_setup_priority() const override;
-      void reset(uint8_t address);
+      void reset();
+      void reset(uint8_t address, bool queue_);
       void send(uint8_t address, uint8_t function_code, uint16_t start_address, uint16_t number_of_entities,
                 uint8_t payload_len = 0, const uint8_t *payload = nullptr);
       void send_raw(const std::vector<uint8_t> &payload);
+      bool is_busy(uint8_t address);
       void set_role(ModbusRole role)
       {
         this->role = role;
@@ -71,7 +75,7 @@ namespace esphome
       GPIOPin *flow_control_pin_{nullptr};
 
       bool parse_modbus_byte_(uint8_t byte);
-      bool process_modbus_(size_t at, uint8_t retry_count);
+      bool process_modbus_(size_t at, bool retry);
       uint16_t send_wait_time_{250};
       bool disable_crc_;
       std::vector<uint8_t> rx_buffer_;
@@ -82,6 +86,8 @@ namespace esphome
       uint16_t sniffer_count[MAX_MODBUS_ADDRESS_COUNT + 1];
       /// when was the last master operation
       uint32_t last_command_master_;
+      // Indicator if the master is blocked
+      bool master_is_busy_;
     };
 
     class ModbusDevice
@@ -92,9 +98,11 @@ namespace esphome
       virtual void on_modbus_data(const std::vector<uint8_t> &data) = 0;
       virtual void on_modbus_error(uint8_t function_code, uint8_t exception_code) {}
       virtual void on_modbus_read_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) {};
-      virtual uint16_t on_modbus_mode_server(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) { return 0; };
-      virtual bool  is_modbus_server_register(uint16_t start_address) { return false; };
-      virtual void clear_command_queue();
+      virtual uint16_t on_modbus_shared_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) { return 0; };
+      virtual bool is_modbus_shared_register(uint16_t start_address) { return false; };
+      virtual bool is_sniffer() { return false; };
+      virtual void clear_command_queue() {};
+      virtual void clear_next_command() {};
       void send(uint8_t function, uint16_t start_address, uint16_t number_of_entities, uint8_t payload_len = 0,
                 const uint8_t *payload = nullptr)
       {

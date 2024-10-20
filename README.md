@@ -2,6 +2,8 @@
 
 This configuration is based on [github repo for the blauhoff battery](https://github.com/driesk81/home-assistant-modbus-home-battery-blauhoff) adding registers for eCactus ECOS from [this post](https://community.home-assistant.io/t/interface-home-battery-blauhoff-or-ecactus-via-esphome-and-modbus/645345). Also i use an ESP32-S3 allowing it to fit into a small box.
 
+The modbus controller has been rewritten so it can listen to commands from the Master on the modbus of the ECOS and at the same time request additional information.
+
 
 ## Let home assistant control your all in one home battery via modbus and esphome.
 
@@ -46,7 +48,7 @@ The main purpose is to make the BMS (battery management system) available in Hom
 # lovelace setup
 
 ```
- type: custom:power-flow-card
+type: custom:power-flow-card
 watt_threshold: 1000
 entities:
   battery: sensor.yoursensorname_dsp_power
@@ -56,25 +58,22 @@ entities:
 ```
  ![flow-card](flow-card.png)
 
+type: custom:power-flow-card
+entities:
+  battery: sensor.esp_ecactus_2_home_power
+  battery_charge: sensor.sensor.esp_ecactus_soc
+  grid: sensor.tibber_pulse_thuis_power
+  solar: sensor.esp_ecactus_1_pv_power
+
 
 # Research links
 
 * (Use of resistor)[https://know.innon.com/bias-termination-rs485-network]
 
-# Issues
-
-* When there are more inverters (master=0x01 /slave=0x02) there is communication over the RS485 port between
-master and slave which throws of the values recieved
-* On regular basis a command is send to request all state of charge (36155) to all available addresses (0-10)
-
 # TODO
 
-* Add code to modbus controller to work with listner, only sending requests in ready state
-* Implement queue
-* Implemenent counter for the number of registers
-* Prevent sending for now in sniffer mode
-* In modbus controller add the bus-address used to sniff
-* Modbus should keep sniffer state by bus-address 
-* Change the code, the controller should be the sniffer
-* Mobus should just reproces, if it hangs to long
-* In modbus send only then in queue is empty
+* Fix issue reading multiple for addres = 2 while receiving
+
+# Issue
+
+* Still work in process, look at todo

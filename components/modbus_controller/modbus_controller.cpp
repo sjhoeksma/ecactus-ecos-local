@@ -11,11 +11,21 @@ namespace esphome
 
     void ModbusController::setup()
     {
-      if (this->parent_->role == modbus::ModbusRole::Multi)
+      if (this->parent_->role == modbus::ModbusRole::SHARED)
       {
         this->allow_duplicate_commands_ = true;
       }
       this->create_register_ranges_();
+    }
+
+    void ModbusController::clear_next_command()
+    {
+      this->last_command_timestamp_ = 0;
+      if (!this->command_queue_.empty())
+      {
+        auto &command = this->command_queue_.front();
+        command->reset_send_count();
+      }
     }
 
     /*
@@ -32,12 +42,15 @@ namespace esphome
       {
         auto &command = this->command_queue_.front();
 
-        if (command->register_type != ModbusRegisterType::SNIFFER ||
-            (this->parent_->role == modbus::ModbusRole::Multi &&
-             this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::MASTER &&
-             this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::UNKOWN))
+        if (this->is_sniffer())
         {
-          return (!this->command_queue_.empty()); // Skip
+          if (command->register_type != ModbusRegisterType::SNIFFER ||
+              (this->parent_->role == modbus::ModbusRole::SHARED &&
+               this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::MASTER &&
+               this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::UNKOWN))
+          {
+            return (!this->command_queue_.empty()); // Skip
+          }
         }
 
         // remove from queue if command was sent too often
@@ -60,11 +73,18 @@ namespace esphome
           ESP_LOGD(TAG, "Modbus command to device=%d register=0x%02X no response received - removed from send queue",
                    this->address_, command->register_address);
           this->command_queue_.pop_front();
+          this->parent_->reset(this->address_, false);
         }
-        else
+        else if (!this->parent_->is_busy(this->address_))
         {
-          ESP_LOGD(TAG, "Sending next modbus command to device %d register 0x%02X(%d) count %d", this->address_,
-                   command->register_address, command->register_address, command->register_count);
+          ESP_LOGD(TAG, "Sending next modbus command to device %d register 0x%02X(%d) count %d, send_count %d", this->address_,
+                   command->register_address, command->register_address, command->register_count, command->send_count());
+
+          // For none sniffers we should always clear the settings
+          if (!this->is_sniffer() || command->send_count() != 0)
+          {
+            this->parent_->reset(this->address_, false);
+          }
           command->send();
 
           this->last_command_timestamp_ = millis();
@@ -193,7 +213,7 @@ namespace esphome
     }
 
     /// called when we want to know is this address is sniffer register
-    bool ModbusController:: is_modbus_server_register(uint16_t start_address)
+    bool ModbusController::is_modbus_shared_register(uint16_t start_address)
     {
       auto reg_it = find_if(begin(register_ranges_), end(register_ranges_), [=](RegisterRange const &r)
                             { return (r.start_address == start_address && r.register_type == ModbusRegisterType::SNIFFER); });
@@ -201,11 +221,11 @@ namespace esphome
       return (reg_it != register_ranges_.end());
     }
 
-    uint16_t ModbusController::on_modbus_sniffer_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers)
+    uint16_t ModbusController::on_modbus_shared_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers)
     {
-      ESP_LOGD(TAG, "Modbus Sniffer detected for device=%d, start_address : 0x%X(%d) - for %u registers", this->address_, start_address, start_address, number_of_registers);
+      ESP_LOGD(TAG, "Modbus shared register detected for device=%d, start_address : 0x%X(%d) - for %u registers", this->address_, start_address, start_address, number_of_registers);
 
-      if (!this-> is_modbus_server_register(start_address))
+      if (!this->is_modbus_shared_register(start_address))
       {
         ESP_LOGI(TAG, "Register for device=%d, start_address : 0x%X , count=%d not found!", this->address_, start_address, number_of_registers);
         if (number_of_registers > 1)
@@ -354,7 +374,7 @@ namespace esphome
         ESP_LOGVV(TAG, "Updating range 0x%X", r.start_address);
         update_range_(r);
       }
-      ESP_LOGD(TAG, "Modbus update command queue (%zu)", this->command_queue_.size());
+      ESP_LOGD(TAG, "Modbus update command queue (%zu) for address (%d)", this->command_queue_.size(), this->address_);
     }
 
     // walk through the sensors and determine the register ranges to read

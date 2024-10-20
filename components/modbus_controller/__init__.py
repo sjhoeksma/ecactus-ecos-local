@@ -65,7 +65,6 @@ MODBUS_FUNCTION_CODE = {
 
 ModbusRegisterType_ns = modbus_controller_ns.namespace("ModbusRegisterType")
 ModbusRegisterType = ModbusRegisterType_ns.enum("ModbusRegisterType")
-ControlerModeType = ModbusRegisterType_ns.enum("ControllerMode")
 
 MODBUS_WRITE_REGISTER_TYPE = {
     "custom": ModbusRegisterType.CUSTOM,
@@ -73,17 +72,18 @@ MODBUS_WRITE_REGISTER_TYPE = {
     "holding": ModbusRegisterType.HOLDING,
 }
 
-CONTROLLER_MODE_TYPE = {
-    "default": ControlerModeType.DEFAULT,
-    "sniffer": ControlerModeType.SNIFFER,
-}
-
-
 MODBUS_REGISTER_TYPE = {
     **MODBUS_WRITE_REGISTER_TYPE,
     "discrete_input": ModbusRegisterType.DISCRETE_INPUT,
     "read": ModbusRegisterType.READ,
     "sniffer": ModbusRegisterType.SNIFFER,
+}
+
+ControllerModeType = modbus_controller_ns.ControllerModeType.enum("ControllerModeType")
+
+CONTROLLER_MODE_TYPE = {
+    "normal": ControllerModeType.NORMAL,
+    "sniffer": ControllerModeType.SNIFFER,
 }
 
 SensorValueType_ns = modbus_controller_ns.namespace("SensorValueType")
@@ -157,8 +157,8 @@ CONFIG_SCHEMA = cv.All(
                 }
             ),
             cv.Optional(
-                CONF_CONTROLLER_MODE, default="default"
-            ),
+                CONF_CONTROLLER_MODE, default="normal"
+            ) :  cv.enum(CONTROLLER_MODE_TYPE),
         }
     )
     .extend(cv.polling_component_schema("60s"))
