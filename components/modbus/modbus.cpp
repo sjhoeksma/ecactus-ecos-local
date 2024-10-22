@@ -167,17 +167,6 @@ namespace esphome
           this->reset();
           return true;
         }
-        if (this->role == ModbusRole::SHARED && this->sniffer_mode[address] == ModbusMode::UNKOWN)
-        {
-          for (auto *device : this->devices_)
-          {
-            if (device->address_ == address)
-            {
-              this->sniffer_mode[address] = device->is_sniffer() ? ModbusMode::MASTER : ModbusMode::CLIENT;
-              break;
-            }
-          }
-        }
 
         // Check if we should, change over to server based on CRC
         if (this->role == ModbusRole::SHARED && at >= 8 &&
@@ -294,8 +283,8 @@ namespace esphome
                 this->sniffer_count[address]--;
               if (this->sniffer_count[address] == 0)
               {
-                this->sniffer_mode[address] = ModbusMode::MASTER;
-                ESP_LOGD(TAG, "Modbus sniffer changing to MASTER for device address=%d", address);
+                this->sniffer_mode[address] = ModbusMode::UNKOWN;
+                ESP_LOGD(TAG, "Modbus sniffer changing to UNKOWN for device address=%d", address);
               }
             }
           }
@@ -319,16 +308,6 @@ namespace esphome
           found = true;
         }
       }
-      // //Check if we should clear wait of other
-      // if (waiting_for_response != 0 && waiting_for_response != address)
-      // {
-      //   for (auto *device : this->devices_)
-      //   {
-      //     if (device->address_ == waiting_for_response)
-      //       device->clear_next_command();
-      //   }
-      //   ESP_LOGD(TAG, "Forced resend for address=%d", waiting_for_response);
-      // }
 
       if (!found)
       {
@@ -366,13 +345,6 @@ namespace esphome
                       uint8_t payload_len, const uint8_t *payload)
     {
       static const size_t MAX_VALUES = 128;
-
-      if (this->role == ModbusRole::SHARED &&
-          !(this->sniffer_mode[address] == ModbusMode::MASTER || this->sniffer_mode[address] == ModbusMode::UNKOWN))
-      {
-        ESP_LOGE(TAG, "Modbus for %d should only send data in MASTER mode (%d)", address, this->sniffer_mode[address]);
-        return;
-      }
 
       // Only check max number of registers for standard function codes
       // Some devices use non standard codes like 0x43

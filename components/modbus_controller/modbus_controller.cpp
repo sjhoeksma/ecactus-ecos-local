@@ -53,7 +53,6 @@ namespace esphome
         if (this->is_sniffer() &&
             (command->register_type == ModbusRegisterType::SNIFFER ||
              (this->parent_->role == modbus::ModbusRole::SHARED &&
-              this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::MASTER &&
               this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::UNKOWN)))
         {
           return (!this->command_queue_.empty()); // Skip

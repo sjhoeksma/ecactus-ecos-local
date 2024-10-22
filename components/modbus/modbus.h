@@ -22,7 +22,6 @@ namespace esphome
       UNKOWN,
       SERVER,
       CLIENT,
-      MASTER,
       SNIFFER,
     };
 

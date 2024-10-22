@@ -20,7 +20,7 @@ The main purpose is to make the BMS (battery management system) available in Hom
 * ```esphome run ecactus.yaml``` on the first time you have to connect usb to pc. All other version can go over the air as long you are connected to same network 
  
 # some remarks: 
-* Make sure that your wifi credentials in the `secrets.yaml`.
+* Make sure that your wifi credentials in the `secrets.yaml`, you can copy `secrets_example.yaml` to `secrets.yaml` and edit.
 * The yaml is tested on a esp32-s3 connected to a TTL to RS485 converter. You can use another esp32 but will need to change the yaml
 * BMS settings can be selected in home assistant via list options and are pushed when [change modus] button is pressed.
 * Known issue:  Component modbus_controller took a long time for an operation (0.05 s) and Components should block for at most 20-30ms i seen no effect or solution.
@@ -48,22 +48,45 @@ The main purpose is to make the BMS (battery management system) available in Hom
 # lovelace setup
 
 ```
-type: custom:power-flow-card
-watt_threshold: 1000
+type: custom:power-flow-card-plus
 entities:
-  battery: sensor.yoursensorname_dsp_power
-  battery_charge: sensor.yoursensorname_esp_v2_soc
-  grid: sensor.yoursensorname_grid_power
-  solar: sensor.yoursnesorname_pv_power
+  home:
+    entity: sensor.esp_ecactus_home_power
+  grid:
+    entity:
+      production: sensor.tibber_pulse_thuis_power
+      consumption: sensor.grid_consumption
+    secondary_info: {}
+  solar:
+    icon: mdi:solar-panel-large
+    entity: sensor.esp_ecactus_pv_power
+  battery:
+    icon: mdi:battery
+    entity:
+      consumption: sensor.battery_consumption
+      production: sensor.battery_production
+  individual:
+    - entity: sensor.wallbox_pulsarplus_sn_347021_laadvermogen
+      color_icon: false
+      display_zero: true
+      #color: '#ff8080'
+      name: Auto
+      icon: mdi:car-electric
+    - entity: sensor.verwarming
+      color_icon: false
+      display_zero: true
+      #color: '#ff8080'
+      name: Verwarming
+      icon: mdi:heating-coil 
+w_decimals: 0
+kw_decimals: 2
+min_flow_rate: 0.9
+max_flow_rate: 6
+watt_threshold: 10000
+clickable_entities: true
+title: My Home
 ```
- ![flow-card](flow-card.png)
-
-type: custom:power-flow-card
-entities:
-  battery: sensor.esp_ecactus_2_home_power
-  battery_charge: sensor.sensor.esp_ecactus_soc
-  grid: sensor.tibber_pulse_thuis_power
-  solar: sensor.esp_ecactus_1_pv_power
+ ![flow-card](flow-card-2.png)
 
 
 # Research links
@@ -72,7 +95,7 @@ entities:
 
 # TODO
 
-* Fix issue reading multiple for addres = 2 while receiving
+
 * is_busy: Function is not working as aspected -> from Master it works
   for slave, it should also check if there are still elements in queue 
   can we check if the command on top is a send command or as sniffer
@@ -80,6 +103,7 @@ entities:
   Function should be extended to check if there is not a sniffer at top of queue otherwise retry on sniffer will not work
 * Grid power is only shown on master, validate
 * Probleem is dat we 8 in queue hebben, even printen wat ze zijn -> We zien dat de queue niet leeg is , komt dit door send ?
+* Master flags can be removed because we now as is_busy flag
 
 # Issue
 
