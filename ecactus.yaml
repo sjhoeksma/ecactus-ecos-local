@@ -107,7 +107,7 @@ modbus_controller:
     update_interval: 5s
     #command_throttle: 10ms
     #offline_skip_updates: 10
-    max_cmd_retries: 1
+    #max_cmd_retries: 1
     mode: sniffer
 
 # #define variables
