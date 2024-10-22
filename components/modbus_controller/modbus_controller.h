@@ -503,7 +503,7 @@ namespace esphome
       /// called when we want to know is this address is sniffer register
       bool is_modbus_shared_register(uint16_t start_address) final;
       /// reset the commandque
-      void clear_command_queue() final { command_queue_.clear(); }
+      void clear_command_queue() final;
 
       /// default delegate called by process_modbus_data when a response has retrieved from the incoming queue
       void on_register_data(ModbusRegisterType register_type, uint16_t start_address, const std::vector<uint8_t> &data);

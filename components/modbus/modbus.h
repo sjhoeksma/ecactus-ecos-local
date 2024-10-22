@@ -33,6 +33,8 @@ namespace esphome
     public:
       static const uint8_t MAX_MODBUS_ADDRESS_COUNT = 10; // Last =10
       static const uint8_t MAX_COMMAND_DURATION = 50;     // ms
+      static const uint8_t MODBUS_MASTER_ID = 1;          // The master on the bus
+      static const uint16_t CMD_SOC = 36155;              // The SOC request
       Modbus() = default;
 
       void setup() override;
@@ -45,7 +47,7 @@ namespace esphome
 
       float get_setup_priority() const override;
       void reset();
-      void reset(uint8_t address, bool queue_);
+      void reset(uint8_t address);
       void send(uint8_t address, uint8_t function_code, uint16_t start_address, uint16_t number_of_entities,
                 uint8_t payload_len = 0, const uint8_t *payload = nullptr);
       void send_raw(const std::vector<uint8_t> &payload);
@@ -103,6 +105,7 @@ namespace esphome
       virtual bool is_sniffer() { return false; };
       virtual void clear_command_queue() {};
       virtual void clear_next_command() {};
+      size_t get_command_queue_length() { return 0; };
       void send(uint8_t function, uint16_t start_address, uint16_t number_of_entities, uint8_t payload_len = 0,
                 const uint8_t *payload = nullptr)
       {

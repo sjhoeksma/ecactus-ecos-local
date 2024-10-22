@@ -73,6 +73,13 @@ entities:
 # TODO
 
 * Fix issue reading multiple for addres = 2 while receiving
+* is_busy: Function is not working as aspected -> from Master it works
+  for slave, it should also check if there are still elements in queue 
+  can we check if the command on top is a send command or as sniffer
+  reads can be retried sniffers not.
+  Function should be extended to check if there is not a sniffer at top of queue otherwise retry on sniffer will not work
+* Grid power is only shown on master, validate
+* Probleem is dat we 8 in queue hebben, even printen wat ze zijn -> We zien dat de queue niet leeg is , komt dit door send ?
 
 # Issue
 

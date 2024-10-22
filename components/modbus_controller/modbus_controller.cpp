@@ -28,6 +28,14 @@ namespace esphome
       }
     }
 
+    // Clear the command queue
+    void ModbusController::clear_command_queue()
+    {
+      ESP_LOGD(TAG, "Clearing command queue(%d)", this->command_queue_.size());
+      this->command_queue_.clear();
+      this->clear_next_command();
+    }
+
     /*
      To work with the existing modbus class and avoid polling for responses a command queue is used.
      send_next_command will submit the command at the top of the queue and set the corresponding callback
@@ -42,15 +50,13 @@ namespace esphome
       {
         auto &command = this->command_queue_.front();
 
-        if (this->is_sniffer())
+        if (this->is_sniffer() &&
+            (command->register_type == ModbusRegisterType::SNIFFER ||
+             (this->parent_->role == modbus::ModbusRole::SHARED &&
+              this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::MASTER &&
+              this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::UNKOWN)))
         {
-          if (command->register_type != ModbusRegisterType::SNIFFER ||
-              (this->parent_->role == modbus::ModbusRole::SHARED &&
-               this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::MASTER &&
-               this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::UNKOWN))
-          {
-            return (!this->command_queue_.empty()); // Skip
-          }
+          return (!this->command_queue_.empty()); // Skip
         }
 
         // remove from queue if command was sent too often
@@ -73,9 +79,9 @@ namespace esphome
           ESP_LOGD(TAG, "Modbus command to device=%d register=0x%02X no response received - removed from send queue",
                    this->address_, command->register_address);
           this->command_queue_.pop_front();
-          this->parent_->reset(this->address_, false);
+          this->parent_->reset(this->address_);
         }
-        else if (!this->parent_->is_busy(this->address_))
+        else if (!this->parent_->is_busy(this->is_sniffer() ? 0 : this->address_))
         {
           ESP_LOGD(TAG, "Sending next modbus command to device %d register 0x%02X(%d) count %d, send_count %d", this->address_,
                    command->register_address, command->register_address, command->register_count, command->send_count());
@@ -83,7 +89,7 @@ namespace esphome
           // For none sniffers we should always clear the settings
           if (!this->is_sniffer() || command->send_count() != 0)
           {
-            this->parent_->reset(this->address_, false);
+            this->parent_->reset(this->address_);
           }
           command->send();
 
@@ -225,6 +231,20 @@ namespace esphome
     {
       ESP_LOGD(TAG, "Modbus shared register detected for device=%d, start_address : 0x%X(%d) - for %u registers", this->address_, start_address, start_address, number_of_registers);
 
+      // Add a new sniffer means all old sniffers should be removed from queue
+      while (this->command_queue_.size() > 0)
+      {
+        auto &command = this->command_queue_.front();
+        if (command->register_type == ModbusRegisterType::SNIFFER)
+        {
+          this->command_queue_.pop_front();
+        }
+        else
+        {
+          break;
+        }
+      }
+
       if (!this->is_modbus_shared_register(start_address))
       {
         ESP_LOGI(TAG, "Register for device=%d, start_address : 0x%X , count=%d not found!", this->address_, start_address, number_of_registers);
@@ -243,6 +263,7 @@ namespace esphome
         {
           queue_command(ModbusCommandItem::create_read_command(this, ModbusRegisterType::SNIFFER, ModbusController::SNIFFER_ADDRESS, number_of_registers));
         }
+        this->clear_next_command();
         return number_of_registers > 1 ? (number_of_registers * 2) + 1 : number_of_registers;
       }
 
@@ -261,6 +282,7 @@ namespace esphome
       {
         queue_command(ModbusCommandItem::create_read_command(this, ModbusRegisterType::SNIFFER, start_address, number_of_registers));
       }
+      this->clear_next_command();
       return number_of_registers > 1 ? (number_of_registers * 2) + 1 : number_of_registers;
     }
 
@@ -310,6 +332,17 @@ namespace esphome
             // update the payload of the queued command
             // replaces a previous command
             item->payload = command.payload;
+            return;
+          }
+        }
+      }
+      if (this->command_queue_.size() > 0 && this->is_sniffer() && command.register_type == ModbusRegisterType::SNIFFER)
+      { // On sniffer mode, we make sure all sniffer items are added before none sniffers
+        for (auto cmd = this->command_queue_.begin(); cmd != this->command_queue_.end(); ++cmd)
+        {
+          if ((*cmd)->register_type != ModbusRegisterType::SNIFFER)
+          {
+            this->command_queue_.insert(cmd, make_unique<ModbusCommandItem>(command));
             return;
           }
         }
