@@ -86,8 +86,6 @@ namespace esphome
       std::vector<ModbusDevice *> devices_;
 
       uint16_t sniffer_count[MAX_MODBUS_ADDRESS_COUNT + 1];
-      /// when was the last master operation
-      uint32_t last_command_master_;
       // Indicator if the master is blocked
       bool master_is_busy_;
     };

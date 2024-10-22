@@ -76,11 +76,9 @@ namespace esphome
           this->sniffer_count[device->address_] = 0;
         }
         // Clear ths incomming bus
+        uint8_t byte;
         while (this->available())
-        {
-          uint8_t byte;
           this->read_byte(&byte);
-        }
         this->rx_buffer_.clear();
         this->waiting_for_response = 0;
         this->master_is_busy_ = false;
@@ -190,7 +188,7 @@ namespace esphome
           uint16_t remote_crc = uint16_t(raw[6]) | (uint16_t(raw[7]) << 8);
           if (computed_crc == remote_crc)
           {
-            ESP_LOGD(TAG, "Modbus reset for crc retry address(%d), raw: %s", address, format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.begin() + data_offset + data_len)).c_str());
+            ESP_LOGD(TAG, "Modbus reset based on crc for address(%d), raw: %s", address, format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.begin() + data_offset + data_len)).c_str());
             this->reset(address);
             this->sniffer_mode[address] = ModbusMode::SERVER;
           }
@@ -280,14 +278,14 @@ namespace esphome
 
           else if (this->role == ModbusRole::SHARED && device->is_sniffer())
           {
-            ESP_LOGD(TAG, "Got Modbus frame from device address=%d, mode %d, raw: %s", address, this->sniffer_mode[address], format_hex_pretty(data).c_str());
+            ESP_LOGV(TAG, "Got Modbus frame from device address=%d, mode %d, raw: %s", address, this->sniffer_mode[address], format_hex_pretty(data).c_str());
             if (this->sniffer_mode[address] == ModbusMode::SERVER && (function_code == 0x3 || function_code == 0x4))
             {
               this->sniffer_count[address] = device->on_modbus_shared_registers(function_code,
                                                                                 uint16_t(data[1]) | (uint16_t(data[0]) << 8),
                                                                                 uint16_t(data[3]) | (uint16_t(data[2]) << 8));
               this->sniffer_mode[address] = ModbusMode::SNIFFER;
-              ESP_LOGD(TAG, "Modbus sniffer changing to SNIFFER for device address=%d, duration(%d)ms", address, millis() - this->last_command_master_);
+              ESP_LOGD(TAG, "Modbus sniffer changing to SNIFFER for device address=%d", address);
             }
             else
             {
@@ -297,7 +295,6 @@ namespace esphome
               if (this->sniffer_count[address] == 0)
               {
                 this->sniffer_mode[address] = ModbusMode::MASTER;
-                this->last_command_master_ = millis();
                 ESP_LOGD(TAG, "Modbus sniffer changing to MASTER for device address=%d", address);
               }
             }
@@ -322,17 +319,16 @@ namespace esphome
           found = true;
         }
       }
-      if (waiting_for_response != 0 && waiting_for_response != address)
-      {
-        for (auto *device : this->devices_)
-        {
-          if (device->address_ == waiting_for_response)
-          {
-            device->clear_next_command();
-          }
-        }
-        ESP_LOGD(TAG, "Forced resend for address=%d", waiting_for_response);
-      }
+      // //Check if we should clear wait of other
+      // if (waiting_for_response != 0 && waiting_for_response != address)
+      // {
+      //   for (auto *device : this->devices_)
+      //   {
+      //     if (device->address_ == waiting_for_response)
+      //       device->clear_next_command();
+      //   }
+      //   ESP_LOGD(TAG, "Forced resend for address=%d", waiting_for_response);
+      // }
 
       if (!found)
       {
