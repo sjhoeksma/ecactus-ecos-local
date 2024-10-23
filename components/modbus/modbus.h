@@ -50,7 +50,7 @@ namespace esphome
       void send(uint8_t address, uint8_t function_code, uint16_t start_address, uint16_t number_of_entities,
                 uint8_t payload_len = 0, const uint8_t *payload = nullptr);
       void send_raw(const std::vector<uint8_t> &payload);
-      bool is_busy(uint8_t address);
+      bool is_busy();
       void set_role(ModbusRole role)
       {
         this->role = role;
@@ -98,11 +98,9 @@ namespace esphome
       virtual void on_modbus_error(uint8_t function_code, uint8_t exception_code) {}
       virtual void on_modbus_read_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) {};
       virtual uint16_t on_modbus_shared_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) { return 0; };
-      virtual bool is_modbus_shared_register(uint16_t start_address) { return false; };
       virtual bool is_sniffer() { return false; };
       virtual void clear_command_queue() {};
-      virtual void clear_next_command() {};
-      size_t get_command_queue_length() { return 0; };
+      virtual bool front_command_sniffer() { return false; };
       void send(uint8_t function, uint16_t start_address, uint16_t number_of_entities, uint8_t payload_len = 0,
                 const uint8_t *payload = nullptr)
       {

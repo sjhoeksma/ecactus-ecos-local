@@ -54,9 +54,8 @@ entities:
     entity: sensor.esp_ecactus_home_power
   grid:
     entity:
-      production: sensor.tibber_pulse_thuis_power
-      consumption: sensor.grid_consumption
-    secondary_info: {}
+      production: sensor.tibber_pulse_thuis_power_production
+      consumption: sensor.tibber_pulse_thuis_power
   solar:
     icon: mdi:solar-panel-large
     entity: sensor.esp_ecactus_pv_power
@@ -69,15 +68,13 @@ entities:
     - entity: sensor.wallbox_pulsarplus_sn_347021_laadvermogen
       color_icon: false
       display_zero: true
-      #color: '#ff8080'
       name: Auto
       icon: mdi:car-electric
-    - entity: sensor.verwarming
+    - entity: sensor.warmtepomp_vermogen
       color_icon: false
       display_zero: true
-      #color: '#ff8080'
       name: Verwarming
-      icon: mdi:heating-coil 
+      icon: mdi:heating-coil
 w_decimals: 0
 kw_decimals: 2
 min_flow_rate: 0.9
@@ -104,6 +101,9 @@ title: My Home
 * Grid power is only shown on master, validate
 * Probleem is dat we 8 in queue hebben, even printen wat ze zijn -> We zien dat de queue niet leeg is , komt dit door send ?
 * Master flags can be removed because we now as is_busy flag
+* Systeem stocked af en toe. Waarom loopt het niet door
+* Slave loopt niet goed 
+* Lijkt op disconnect
 
 # Issue
 

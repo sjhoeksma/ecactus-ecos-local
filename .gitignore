@@ -8,3 +8,4 @@ __pycache__/
 .vscode/
 components/modbus_controller/todo.md
 ecactus copy.yaml
+*.log

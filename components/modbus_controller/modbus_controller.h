@@ -500,10 +500,9 @@ namespace esphome
       void on_modbus_read_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) final;
       /// called when a modbus sniffer request (function code 3 or 4) was parsed without errors
       uint16_t on_modbus_shared_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) final;
-      /// called when we want to know is this address is sniffer register
-      bool is_modbus_shared_register(uint16_t start_address) final;
       /// reset the commandque
       void clear_command_queue() final;
+      bool front_command_sniffer() final;
 
       /// default delegate called by process_modbus_data when a response has retrieved from the incoming queue
       void on_register_data(ModbusRegisterType register_type, uint16_t start_address, const std::vector<uint8_t> &data);
@@ -535,7 +534,6 @@ namespace esphome
       /// set the controller mode
       void set_controller_mode(ControllerModeType mode) { this->controller_mode_ = mode; }
       bool is_sniffer() { return this->controller_mode_ == ControllerModeType::SNIFFER; }
-      void clear_next_command();
 
     protected:
       /// parse sensormap_ and create range of sequential addresses
