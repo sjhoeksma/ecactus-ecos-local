@@ -16,22 +16,26 @@ namespace esphome
         this->flow_control_pin_->setup();
       }
     }
-    bool Modbus::is_busy()
+    bool Modbus::is_busy(uint8_t address)
     {
+
+      // If we are waiting for a response we are also busy
+      if (this->waiting_for_response == address)
+      {
+        return true;
+      }
+
       // Check we have out standing requests and are not waiting for response
       for (auto *device : this->devices_)
       {
-        // Check if the master is blocked because it is sending out a request
-        if (device->address_ == Modbus::MODBUS_MASTER_ID && this->master_is_busy_)
-        {
-          return true;
-        }
-        if (this->sniffer_count[device->address_] > 0 && device->front_command_sniffer())
+        if ((device->address_ == address || address == Modbus::MODBUS_MASTER_ID) &&
+            // if ((device->address_ == address) &&
+            this->sniffer_count[device->address_] > 0 && device->front_command_sniffer())
         {
           return true;
         }
       }
-      if (this->available() || this->rx_buffer_.size() > 0) //|| (millis() - this->last_modbus_byte_ < 5))
+      if (this->available() || this->rx_buffer_.size() > 0 || (millis() - this->last_not_found_ < 10))
         return true;
       return false;
     }
@@ -75,6 +79,7 @@ namespace esphome
       // Check for a hanging request
       if (this->role == ModbusRole::SHARED)
       {
+        ESP_LOGW(TAG, "Modbus reset sniffer changing to UNKNOWN for all devices");
         for (auto *device : this->devices_)
         {
           device->clear_command_queue();
@@ -87,8 +92,6 @@ namespace esphome
           this->read_byte(&byte);
         this->rx_buffer_.clear();
         this->waiting_for_response = 0;
-        this->master_is_busy_ = false;
-        ESP_LOGW(TAG, "Modbus reset sniffer changing to UNKNOWN for all devices");
       }
     }
 
@@ -109,9 +112,6 @@ namespace esphome
             }
             this->sniffer_mode[device->address_] = ModbusMode::UNKOWN;
             this->sniffer_count[device->address_] = 0;
-            if (address == Modbus::MODBUS_MASTER_ID)
-              this->master_is_busy_ = false;
-
             break;
           }
         }
@@ -161,21 +161,21 @@ namespace esphome
 
         if (computed_crc != remote_crc)
         {
-          ESP_LOGW(TAG, "Modbus user-defined function %02X found with failed CRC, raw: %s", function_code, format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.begin() + data_offset + data_len)).c_str());
+          ESP_LOGW(TAG, "Modbus(%d) user-defined function %02X found with failed CRC, raw: %s", address, function_code, format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.begin() + data_offset + data_len)).c_str());
           this->reset();
           return true;
         }
 
-        ESP_LOGD(TAG, "Modbus user-defined function %02X found", function_code);
+        ESP_LOGD(TAG, "Modbus(%d) user-defined function %02X found", address, function_code);
       }
       else
       {
         // Check if we have data corruption
-        if (this->role == ModbusRole::SHARED && address > MAX_MODBUS_ADDRESS_COUNT)
+        if (this->role == ModbusRole::SHARED && (address > MAX_MODBUS_ADDRESS_COUNT))
         {
-          ESP_LOGW(TAG, "Modbus address(%d) error ", address);
-          this->reset();
-          return true;
+          ESP_LOGV(TAG, "Modbus (%d)content error, raw: %s ", address, format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.end())).c_str());
+          this->rx_buffer_.erase(this->rx_buffer_.begin());
+          return this->rx_buffer_.size() > 0;
         }
 
         ESP_LOGV(TAG, "Modbus data address(%d), raw: %s", address, format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.end())).c_str());
@@ -202,7 +202,7 @@ namespace esphome
             this->sniffer_mode[address] = ModbusMode::SERVER;
             data_offset = 2;
             data_len = 4;
-            ESP_LOGD(TAG, "Modbus reset to SERVER based on crc for address(%d), raw: %s", address, format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.end())).c_str());
+            ESP_LOGD(TAG, "Modbus (%d)reset to SERVER for (%d) based on crc, raw: %s", address, uint16_t(raw[data_offset + 1]) | (uint16_t(raw[data_offset]) << 8), format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.end())).c_str());
           }
         }
 
@@ -254,9 +254,10 @@ namespace esphome
           }
           else
           {
-            ESP_LOGW(TAG, "Modbus (%d) CRC Check failed! %02X!=%02X , raw: %s", address, computed_crc, remote_crc, format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.begin() + data_offset + data_len)).c_str());
-            this->reset(); // Will clear all on CRC
-            return false;
+            ESP_LOGV(TAG, "Modbus (%d) mode(%d) CRC Check failed! %02X!=%02X , raw: %s", address, this->sniffer_mode[address], computed_crc, remote_crc, format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.begin() + data_offset + data_len)).c_str());
+            // Just eat one of bus for now
+            this->rx_buffer_.erase(this->rx_buffer_.begin());
+            return this->rx_buffer_.size() > 0;
           }
         }
       }
@@ -305,13 +306,15 @@ namespace esphome
             {
               ESP_LOGD(TAG, "Modbus (%d) data %s", address, format_hex_pretty(std::vector<uint8_t>(this->rx_buffer_.begin(), this->rx_buffer_.begin() + data_offset + data_len)).c_str());
               ESP_LOGD(TAG, "Modbus (%d) Processing data %s", address, format_hex_pretty(data).c_str());
-              device->on_modbus_data(data);
-              if (this->sniffer_count[address] > 0)
-                this->sniffer_count[address]--;
-              if (this->sniffer_count[address] == 0)
+              if (device->on_modbus_data(data))
               {
-                this->sniffer_mode[address] = ModbusMode::UNKOWN;
-                ESP_LOGD(TAG, "Modbus sniffer changing to UNKOWN for device address=%d", address);
+                if (this->sniffer_count[address] > 0)
+                  this->sniffer_count[address]--;
+                if (this->sniffer_count[address] == 0)
+                {
+                  this->sniffer_mode[address] = ModbusMode::UNKOWN;
+                  ESP_LOGD(TAG, "Modbus sniffer changing to UNKOWN for device address=%d", address);
+                }
               }
             }
           }
@@ -323,13 +326,15 @@ namespace esphome
           }
           else
           {
-            device->on_modbus_data(data);
-            if (this->sniffer_count[address] > 0)
-              this->sniffer_count[address]--;
-            if (this->sniffer_count[address] == 0)
+            if (device->on_modbus_data(data))
             {
-              this->sniffer_mode[address] = ModbusMode::UNKOWN;
-              ESP_LOGD(TAG, "Modbus sniffer changing to UNKOWN for device address=%d", address);
+              if (this->sniffer_count[address] > 0)
+                this->sniffer_count[address]--;
+              if (this->sniffer_count[address] == 0)
+              {
+                this->sniffer_mode[address] = ModbusMode::UNKOWN;
+                ESP_LOGD(TAG, "Modbus sniffer changing to UNKOWN for device address=%d", address);
+              }
             }
           }
           found = true;
@@ -341,24 +346,16 @@ namespace esphome
       {
         this->sniffer_mode[address] = ModbusMode::UNKOWN;
         this->sniffer_count[address] = 0;
+        this->last_not_found_ = millis();
         ESP_LOGD(TAG, "Got Modbus frame from unknown device address=%d!,raw: %s", address, format_hex_pretty(data).c_str());
-
-        // ON ECOS the master send, 10 SOC (35155) request, blocking, any capability to send a command to master
-        if (this->role == ModbusRole::SHARED && (uint16_t(data[1]) | (uint16_t(data[0]) << 8)) == Modbus::CMD_SOC)
-        {
-          // Temp work arround
-          if (address == Modbus::MAX_MODBUS_ADDRESS_COUNT)
-          {
-            this->reset();
-          }
-          this->master_is_busy_ = address != Modbus::MAX_MODBUS_ADDRESS_COUNT;
-          ESP_LOGV(TAG, "Changing master busy %d, %d", address, this->master_is_busy_);
-        }
+      }
+      else
+      {
+        waiting_for_response = 0;
       }
       // reduce the buffer with the number or processed bytes = data_offset + data_len + crc(2)
-      ESP_LOGD(TAG, "Removing data(%d)", data_offset + data_len + 2);
+      ESP_LOGD(TAG, "Removing data(%d) of %d", data_offset + data_len + 2, this->rx_buffer_.size());
       this->rx_buffer_.erase(this->rx_buffer_.begin(), this->rx_buffer_.begin() + data_offset + data_len + 2);
-      waiting_for_response = 0;
       return this->rx_buffer_.size() > 0;
     }
 

@@ -50,7 +50,7 @@ namespace esphome
       void send(uint8_t address, uint8_t function_code, uint16_t start_address, uint16_t number_of_entities,
                 uint8_t payload_len = 0, const uint8_t *payload = nullptr);
       void send_raw(const std::vector<uint8_t> &payload);
-      bool is_busy();
+      bool is_busy(uint8_t address);
       void set_role(ModbusRole role)
       {
         this->role = role;
@@ -85,8 +85,8 @@ namespace esphome
       std::vector<ModbusDevice *> devices_;
 
       uint16_t sniffer_count[MAX_MODBUS_ADDRESS_COUNT + 1];
-      // Indicator if the master is blocked
-      bool master_is_busy_;
+      // Time when we had the last not found
+      uint32_t last_not_found_{0};
     };
 
     class ModbusDevice
@@ -94,7 +94,7 @@ namespace esphome
     public:
       void set_parent(Modbus *parent) { parent_ = parent; }
       void set_address(uint8_t address) { address_ = address; }
-      virtual void on_modbus_data(const std::vector<uint8_t> &data) = 0;
+      virtual bool on_modbus_data(const std::vector<uint8_t> &data) { return true; };
       virtual void on_modbus_error(uint8_t function_code, uint8_t exception_code) {}
       virtual void on_modbus_read_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) {};
       virtual uint16_t on_modbus_shared_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) { return 0; };

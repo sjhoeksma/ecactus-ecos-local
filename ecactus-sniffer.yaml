@@ -1,0 +1,335 @@
+#The script to configure an ESP32 with a RS485 board connected to communicate with eCACTUS ecos 
+#Based on https://github.com/driesk81/home-assistant-modbus-home-battery-blauhoff/blob/main/allinoneBMS.yml
+#and https://community.home-assistant.io/t/interface-home-battery-blauhoff-or-ecactus-via-esphome-and-modbus/645345
+substitutions:
+  name: ecactus-ecos-tst
+  friendly_name: eCACTUS ecos
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: false
+  project:
+    name: ecactus.ecos-esp
+    version: '1.0'
+
+# Specify the board used, I use an ESP32-s3 
+# but uncomment the esp32dev and comment the 2 lines with esp32-s3 when using a normal ESP32
+esp32:
+#  board: esp32dev
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: arduino
+
+external_components:
+# Use from local path for development
+  - source:
+      type: local
+      path: components
+# use a component from a local git repository
+  #  - source: github://sjhoeksma/esphome@sniffer
+  #    components: [ modbus , modbus_controller]
+
+# Enable logging, default is DEBUG
+logger:
+  #level: VERBOSE
+  #level : ERROR
+  #level: INFO
+
+# Enable Home Assistant API
+api:
+   encryption:
+    key: !secret device_key
+
+# Set the Over the Air password
+ota:
+  - platform: esphome
+    #safe_mode: true
+    password: !secret ota_password
+
+# Enable Web server if needed for debuging
+web_server:
+  port: 80
+
+# Enable wifi
+wifi:
+  #use_address: 10.0.0.233
+  ssid: !secret wifi_ssid_home
+  password: !secret wifi_password_home
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    password: "123456789"
+
+# In combination with the `ap` this allows the user
+# to provision wifi credentials to the device.
+captive_portal:
+
+# # Sets up Bluetooth LE (Only on ESP32) to allow the user
+# # to provision wifi credentials to the device.
+# esp32_improv:
+#   authorizer: none
+
+# # Sets up the improv via serial client for Wi-Fi provisioning
+# improv_serial:
+#   next_url: https://example.com/project-template/manual?ip={{ip_address}}&name={{device_name}}&version={{esphome_version}}
+
+
+# Define the uart ports we are going
+uart:
+    id: rs485_uart
+    tx_pin: GPIO6
+    rx_pin: GPIO5
+    baud_rate: 115200
+    stop_bits: 1
+
+modbus:
+    uart_id: rs485_uart
+    id: modbus_uart_1
+    role: shared
+
+modbus_controller:
+  - id: modbus_addr_1
+    address: 0x1 # the Modbus device address of the master
+    #setup_priority: -100 #Priority very late
+    modbus_id: modbus_uart_1
+    update_interval: 2s
+    #command_throttle: 5ms
+    #offline_skip_updates: 10
+    max_cmd_retries: 10
+    #allow_duplicate_commands : true
+    mode: sniffer
+
+  - id: modbus_addr_2
+    address: 0x2 # the Modbus device address of the slave
+    #setup_priority: -100
+    modbus_id: modbus_uart_1
+    update_interval: 2s
+    #command_throttle: 10ms
+    #offline_skip_updates: 10
+    max_cmd_retries: 10
+    mode: sniffer
+
+# Add a switch 
+switch:
+  - platform: restart
+    name: "Restart Monitor"
+
+sensor:
+#--- GLOBAL Sensors -----------------------------------
+  - platform: template
+    name: "# PV power"
+    id: pv_power_sensor
+    icon: mdi:solar-power-variant-outline
+    unit_of_measurement: "W"
+
+  - platform: template
+    name: "# Home power"
+    id: home_power_sensor
+    icon: mdi:home-lightning-bolt-outline
+    unit_of_measurement: "W"
+  
+  - platform: template
+    name: "# Battery power"
+    id: battery_power_sensor
+    icon: mdi:home-lightning-bolt-outline
+    unit_of_measurement: "W"
+
+  - platform: template
+    name: "# SOC"
+    id: batt_soc_sensor
+    icon: mdi:battery-charging-medium
+    unit_of_measurement: "%"
+   
+  - platform: template
+    name: "#1 PV power"
+    id: pv_power_sensor_1
+    icon: mdi:solar-power-variant-outline
+    unit_of_measurement: "W"
+ 
+  - platform: template
+    name: "#1 Home power"
+    id: home_power_sensor_1
+    icon: mdi:home-lightning-bolt-outline
+    unit_of_measurement: "W"
+ 
+  - platform: template
+    name: "#2 PV power"
+    id: pv_power_sensor_2
+    icon: mdi:solar-power-variant-outline
+    unit_of_measurement: "W"
+ 
+  - platform: template
+    name: "#2 Home power"
+    id: home_power_sensor_2
+    icon: mdi:home-lightning-bolt-outline
+    unit_of_measurement: "W"
+ 
+
+#---SENSORS MODBUS_ADDR 1 -----------------------------------
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_1
+    name: "#1 SOC"
+    id: batt_soc_sensor_1
+    icon: mdi:battery-charging-medium
+    register_type: sniffer
+    address: 36155
+    unit_of_measurement: "%"
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_1
+    name: "#1 PV1 power"
+    id: pv1_power_sensor_1
+    icon: mdi:solar-power-variant-outline
+    register_type: sniffer
+    address: 36112
+    unit_of_measurement: "W"
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_1
+    name: "#1 PV2 power"
+    id: pv2_power_sensor_1
+    icon: mdi:solar-power-variant-outline
+    register_type: sniffer
+    address: 36113
+    unit_of_measurement: "W"
+    on_value:
+      - sensor.template.publish:
+          id: pv_power_sensor_1
+          state: !lambda 'return (id(pv2_power_sensor_1).state + id(pv1_power_sensor_1).state);' # calculate PV Power
+      - sensor.template.publish:
+          id: pv_power_sensor
+          state: !lambda 'return (id(pv2_power_sensor_1).state + id(pv1_power_sensor_1).state + id(pv2_power_sensor_2).state + id(pv1_power_sensor_2).state);' # calculate PV Power
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_1
+    name: "#1 Grid power"
+    id: grid_power_sensor_1
+    icon: mdi:transmission-tower
+    register_type: sniffer
+    address: 36131
+    unit_of_measurement: "W"
+    value_type: S_DWORD
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_1
+    name: "#1 Battery power"
+    id: battery_power_sensor_1
+    icon: mdi:home-lightning-bolt-outline
+    register_type: sniffer
+    address: 36138
+    unit_of_measurement: "W"
+    value_type: S_DWORD
+    on_value:
+      - sensor.template.publish:
+          id: home_power_sensor_1
+          state: !lambda 'return (id(battery_power_sensor_1).state + id(pv_power_sensor_1).state + id(grid_power_sensor_1).state);' # calculate Home Power
+      - sensor.template.publish:
+          id: battery_power_sensor
+          state: !lambda 'return (id(battery_power_sensor_1).state + id(battery_power_sensor_2).state);' # calculate Home Power
+      - sensor.template.publish:
+          id: home_power_sensor
+          state: !lambda 'return (id(battery_power_sensor_1).state + id(pv_power_sensor_1).state + id(grid_power_sensor_1).state +  id(battery_power_sensor_2).state + id(pv_power_sensor_2).state + id(grid_power_sensor_2).state);' # calculate Home Power
+
+#--- SENSORS MODBUS_ADDR 2 -----------------------------------
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 SOC"
+    id: batt_soc_sensor_2
+    icon: mdi:battery-charging-medium
+    register_type: sniffer
+    address: 36155
+    unit_of_measurement: "%"
+    on_value:
+      - sensor.template.publish:
+          id: batt_soc_sensor
+          state: !lambda 'return std::min(id(batt_soc_sensor_1).state, id(batt_soc_sensor_2).state);' # calculate SOC
+    
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 48003"
+    id: batt_48003
+    #icon: mdi:battery-charging-medium
+    register_type: sniffer
+    address: 48003
+    #unit_of_measurement: "%"
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 37500"
+    id: batt_37500
+    register_type: sniffer
+    address: 37500
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 37501"
+    id: batt_37501
+    register_type: sniffer
+    address: 37501
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 37502"
+    id: batt_37502
+    register_type: sniffer
+    address: 37502
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 PV1 power"
+    id: pv1_power_sensor_2
+    icon: mdi:solar-power-variant-outline
+    register_type: sniffer
+    address: 36112
+    unit_of_measurement: "W"
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 PV2 power"
+    id: pv2_power_sensor_2
+    icon: mdi:solar-power-variant-outline
+    register_type: sniffer
+    address: 36113
+    unit_of_measurement: "W"
+    on_value:
+      - sensor.template.publish:
+          id: pv_power_sensor_2
+          state: !lambda 'return (id(pv2_power_sensor_2).state + id(pv1_power_sensor_2).state);' # calculate PV Power
+      - sensor.template.publish:
+          id: pv_power_sensor
+          state: !lambda 'return (id(pv2_power_sensor_2).state + id(pv1_power_sensor_2).state + id(pv2_power_sensor_1).state + id(pv1_power_sensor_1).state );' # calculate PV Power
+  
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 Grid power"
+    id: grid_power_sensor_2
+    icon: mdi:transmission-tower
+    register_type: sniffer
+    address: 36131
+    value_type: S_DWORD
+    unit_of_measurement: "W"
+
+  - platform: modbus_controller
+    modbus_controller_id: modbus_addr_2
+    name: "#2 Battery power"
+    id: battery_power_sensor_2
+    icon: mdi:home-lightning-bolt-outline
+    register_type: sniffer
+    address: 36138
+    value_type: S_DWORD
+    unit_of_measurement: "W"
+    on_value:
+      - sensor.template.publish:
+          id: home_power_sensor_2
+          state: !lambda 'return (id(battery_power_sensor_2).state + id(pv2_power_sensor_2).state + id(pv1_power_sensor_2).state + id(grid_power_sensor_2).state);' # calculate Home Power
+      - sensor.template.publish:
+          id: battery_power_sensor
+          state: !lambda 'return (id(battery_power_sensor_1).state + id(battery_power_sensor_2).state);' # calculate Home Power
+      - sensor.template.publish:
+          id: home_power_sensor
+          state: !lambda 'return (id(battery_power_sensor_1).state + id(pv_power_sensor_1).state + id(grid_power_sensor_1).state +  id(battery_power_sensor_2).state + id(pv_power_sensor_2).state + id(grid_power_sensor_2).state);' # calculate Home Power

@@ -21,8 +21,12 @@ namespace esphome
     // Clear the command queue
     void ModbusController::clear_command_queue()
     {
-      ESP_LOGD(TAG, "Clearing command queue(%d)", this->command_queue_.size());
-      this->command_queue_.clear();
+      if (!this->command_queue_.empty())
+      {
+        ESP_LOGD(TAG, "Clearing address %d, command queue(%d)", this->address_, this->command_queue_.size());
+        this->command_queue_.clear();
+        this->prev_data.clear();
+      }
     }
 
     /*
@@ -69,7 +73,7 @@ namespace esphome
           this->command_queue_.pop_front();
           this->parent_->reset(this->address_);
         }
-        else if (!this->parent_->is_busy())
+        else if (!this->parent_->is_busy(this->address_))
         {
           ESP_LOGD(TAG, "Sending next modbus command to device %d register 0x%02X(%d) count %d, send_count %d", this->address_,
                    command->register_address, command->register_address, command->register_count, command->send_count());
@@ -85,6 +89,7 @@ namespace esphome
           {
             this->command_queue_.pop_front();
           }
+          this->prev_data.clear();
         }
       }
       return (!this->command_queue_.empty());
@@ -101,9 +106,17 @@ namespace esphome
     }
 
     // Queue incoming response
-    void ModbusController::on_modbus_data(const std::vector<uint8_t> &data)
+    bool ModbusController::on_modbus_data(const std::vector<uint8_t> &data)
     {
       ESP_LOGD(TAG, "Controller (%d) Processing data queue size, %d", this->address_, this->command_queue_.size());
+
+      // WE SEE some response twice, within a sort time, so we just skip them
+      if (!this->prev_data.empty() && std::equal(this->prev_data.begin(), this->prev_data.end(), data.begin()))
+      {
+        ESP_LOGD(TAG, "Skipping response : %s", format_hex_pretty(data).c_str());
+        return false;
+      }
+
       auto &current_command = this->command_queue_.front();
       if (current_command != nullptr)
       {
@@ -121,19 +134,18 @@ namespace esphome
           }
         }
         this->module_offline_ = false;
-
         ESP_LOGD(TAG, "Modbus (%d) response %d %d queued data: %s", this->address_, current_command->register_address, current_command->register_type, format_hex_pretty(data).c_str());
 
         // Move the commandItem to the response queue
         current_command->payload = data;
         this->incoming_queue_.push(std::move(current_command));
         this->command_queue_.pop_front();
+        this->prev_data = data;
+        return true;
       }
-      else
-      {
-        //
-        ESP_LOGD(TAG, "No current command for data, raw: %s", format_hex_pretty(data).c_str());
-      }
+
+      ESP_LOGW(TAG, "No current command for data, raw: %s", format_hex_pretty(data).c_str());
+      return true; // For now we just return true
     }
 
     // Dispatch the response to the registered handler
@@ -230,6 +242,7 @@ namespace esphome
           break;
         }
       }
+      this->prev_data.clear();
 
       auto sensors = this->find_sensors_(ModbusRegisterType::SNIFFER, start_address);
 
@@ -237,7 +250,8 @@ namespace esphome
       if (sensors.empty())
       {
         ESP_LOGI(TAG, "Register for device=%d, start_address : 0x%X , count=%d not found!", this->address_, start_address, number_of_registers);
-        return 0;
+        queue_command(ModbusCommandItem::create_read_command(this, ModbusRegisterType::SNIFFER, ModbusController::SNIFFER_ADDRESS, number_of_registers));
+        return number_of_registers;
       }
 
       if (number_of_registers > 1)
@@ -251,15 +265,13 @@ namespace esphome
           {
             auto sensor = sensors.cbegin();
             queue_command(ModbusCommandItem::create_read_command(this, ModbusRegisterType::SNIFFER, idx, (*sensor)->register_count));
-            queue_command(ModbusCommandItem::create_read_command(this, ModbusRegisterType::SNIFFER, ModbusController::SNIFFER_ADDRESS, (*sensor)->register_count));
           }
           else
           {
             queue_command(ModbusCommandItem::create_read_command(this, ModbusRegisterType::SNIFFER, ModbusController::SNIFFER_ADDRESS, 1));
-            queue_command(ModbusCommandItem::create_read_command(this, ModbusRegisterType::SNIFFER, ModbusController::SNIFFER_ADDRESS, 1));
           }
         }
-        return (number_of_registers * 2) + 1;
+        return (number_of_registers) + 1;
       }
 
       auto sensor = sensors.cbegin();
@@ -276,7 +288,7 @@ namespace esphome
       if (reg_it == register_ranges_.end())
       {
         if (start_address != ModbusController::SNIFFER_ADDRESS)
-          ESP_LOGE(TAG, "No matching range for sensor found - start_address : 0x%X", start_address);
+          ESP_LOGW(TAG, "No matching range for sensor found on modbus (%d) for address : %d", this->address_, start_address);
       }
       else
       {

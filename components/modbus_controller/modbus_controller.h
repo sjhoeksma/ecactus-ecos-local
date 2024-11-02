@@ -493,7 +493,7 @@ namespace esphome
       /// Registers a server register with the controller. Called by esphomes code generator
       void add_server_register(ServerRegister *server_register) { server_registers_.push_back(server_register); }
       /// called when a modbus response was parsed without errors
-      void on_modbus_data(const std::vector<uint8_t> &data) override;
+      bool on_modbus_data(const std::vector<uint8_t> &data) override;
       /// called when a modbus error response was received
       void on_modbus_error(uint8_t function_code, uint8_t exception_code) override;
       /// called when a modbus request (function code 3 or 4) was parsed without errors
@@ -573,6 +573,7 @@ namespace esphome
       // The current Controller mode of the
       ControllerModeType controller_mode_;
       CallbackManager<void(int, int)> command_sent_callback_{};
+      std::vector<uint8_t> prev_data;
     };
 
     /** Convert vector<uint8_t> response payload to float.
