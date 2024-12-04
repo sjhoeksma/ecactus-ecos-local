@@ -11,10 +11,6 @@ namespace esphome
 
     void ModbusController::setup()
     {
-      if (this->parent_->role == modbus::ModbusRole::SHARED)
-      {
-        this->allow_duplicate_commands_ = true;
-      }
       this->create_register_ranges_();
     }
 
@@ -27,6 +23,11 @@ namespace esphome
         this->command_queue_.clear();
         this->prev_data.clear();
       }
+    }
+
+    void ModbusController::resend()
+    {
+      this->last_command_timestamp_ = 0;
     }
 
     /*
@@ -43,13 +44,15 @@ namespace esphome
       {
         auto &command = this->command_queue_.front();
 
-        if (this->is_sniffer() &&
-            (command->register_type == ModbusRegisterType::SNIFFER ||
-             (this->parent_->role == modbus::ModbusRole::SHARED &&
-              this->parent_->sniffer_mode[this->address_] != modbus::ModbusMode::UNKOWN)))
-        {
-          return (!this->command_queue_.empty()); // Skip
-        }
+        // Sniffer registers are not send
+        if (command->register_type == ModbusRegisterType::SNIFFER)
+          return (!this->command_queue_.empty()); // Skip;
+
+        // // If still command hanging wait
+        // if (this->is_sniffer() && this->parent_->sniffer_count[this->address_] > 0)
+        // {
+        //   return (!this->command_queue_.empty()); // Skip
+        // }
 
         // remove from queue if command was sent too often
         if (!command->should_retry(this->max_cmd_retries_))
@@ -89,7 +92,6 @@ namespace esphome
           {
             this->command_queue_.pop_front();
           }
-          this->prev_data.clear();
         }
       }
       return (!this->command_queue_.empty());
@@ -108,14 +110,15 @@ namespace esphome
     // Queue incoming response
     bool ModbusController::on_modbus_data(const std::vector<uint8_t> &data)
     {
-      ESP_LOGD(TAG, "Controller (%d) Processing data queue size, %d", this->address_, this->command_queue_.size());
-
-      // WE SEE some response twice, within a sort time, so we just skip them
+      ESP_LOGV(TAG, "Controller (%d) Processing data queue size, %d", this->address_, this->command_queue_.size());
+      // WE SEE some response twice
       if (!this->prev_data.empty() && std::equal(this->prev_data.begin(), this->prev_data.end(), data.begin()))
       {
-        ESP_LOGD(TAG, "Skipping response : %s", format_hex_pretty(data).c_str());
+        ESP_LOGD(TAG, "Skipping response address (%d)  : %s", this->address_, format_hex_pretty(data).c_str());
+        this->prev_data.clear();
         return false;
       }
+      this->last_data_timestamp_ = millis();
 
       auto &current_command = this->command_queue_.front();
       if (current_command != nullptr)
@@ -134,7 +137,9 @@ namespace esphome
           }
         }
         this->module_offline_ = false;
-        ESP_LOGD(TAG, "Modbus (%d) response %d %d queued data: %s", this->address_, current_command->register_address, current_command->register_type, format_hex_pretty(data).c_str());
+        ESP_LOGV(TAG, "Modbus (%d) response %d queued data: %s", this->address_,
+                 current_command->register_address,
+                 format_hex_pretty(data).c_str());
 
         // Move the commandItem to the response queue
         current_command->payload = data;
@@ -242,7 +247,6 @@ namespace esphome
           break;
         }
       }
-      this->prev_data.clear();
 
       auto sensors = this->find_sensors_(ModbusRegisterType::SNIFFER, start_address);
 
@@ -250,7 +254,10 @@ namespace esphome
       if (sensors.empty())
       {
         ESP_LOGI(TAG, "Register for device=%d, start_address : 0x%X , count=%d not found!", this->address_, start_address, number_of_registers);
-        queue_command(ModbusCommandItem::create_read_command(this, ModbusRegisterType::SNIFFER, ModbusController::SNIFFER_ADDRESS, number_of_registers));
+        for (size_t i = 0; i < number_of_registers; i++)
+        {
+          queue_command(ModbusCommandItem::create_read_command(this, ModbusRegisterType::SNIFFER, ModbusController::SNIFFER_ADDRESS, 1));
+        }
         return number_of_registers;
       }
 
@@ -271,6 +278,8 @@ namespace esphome
             queue_command(ModbusCommandItem::create_read_command(this, ModbusRegisterType::SNIFFER, ModbusController::SNIFFER_ADDRESS, 1));
           }
         }
+        // Simulate we have just send a command
+        this->last_command_timestamp_ = millis();
         return (number_of_registers) + 1;
       }
 
@@ -443,7 +452,7 @@ namespace esphome
         {
           // this is not the first register in range so it might be possible
           // to reuse the last register or extend the current range
-          if (!curr->force_new_range && r.register_type == curr->register_type &&
+          if (r.register_type != ModbusRegisterType::SNIFFER && !curr->force_new_range && r.register_type == curr->register_type &&
               curr->register_type != ModbusRegisterType::CUSTOM)
           {
             if (curr->start_address == (r.start_address + r.register_count - prev->register_count) &&

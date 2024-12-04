@@ -24,7 +24,7 @@ namespace esphome
         this->sensor_value_type = value_type;
         this->register_count = register_count;
         this->skip_updates = skip_updates;
-        this->force_new_range = register_type == ModbusRegisterType::SNIFFER ? true : force_new_range;
+        this->force_new_range = force_new_range;
       }
 
       void parse_and_publish(const std::vector<uint8_t> &data) override;

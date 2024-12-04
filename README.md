@@ -1,5 +1,6 @@
-# ecactus-ecos-local for HomeAssistant
+# Batty (eCactus-ecos-local) an ESPHome implementatation for the eCactus ecos battery inverter
 
+![setup](images/batty.png)
 This configuration is based on [github repo for the blauhoff battery](https://github.com/driesk81/home-assistant-modbus-home-battery-blauhoff) adding registers for eCactus ECOS from [this post](https://community.home-assistant.io/t/interface-home-battery-blauhoff-or-ecactus-via-esphome-and-modbus/645345). Also i use an ESP32-S3 allowing it to fit into a small box.
 
 The modbus controller has been rewritten so it can listen to commands from the Master on the modbus of the ECOS and at the same time request additional information.
@@ -8,6 +9,7 @@ The modbus controller has been rewritten so it can listen to commands from the M
 
 This yaml can be used to control ecactus-ecos systems.
 The main purpose is to make the BMS (battery management system) available in Home Assistant to make automated charge/discharge possible.
+
 **Use at your own risk.**
 
 ## Installing ESPHome Manually
@@ -31,7 +33,6 @@ The main purpose is to make the BMS (battery management system) available in Hom
 - ecactus-ecos
 - ESP32-S3
 - TTL to RS485 converter
-- container
 - some wire
 
 # setup home assistant with:
@@ -40,14 +41,9 @@ The main purpose is to make the BMS (battery management system) available in Hom
 - ESPHome
 - Power Flow Card
 
-# setup
-
-- Flash ESPHome to ESP32
-- Edit yaml on ESP32
-
 # Hardware setup
 
-![setup](schema.png)
+![setup](images/schema.png)
 
 # lovelace setup
 
@@ -88,17 +84,21 @@ clickable_entities: true
 title: My Home
 ```
 
-![flow-card](flow-card-2.png)
+![flow-card](images/flow-card-2.png)
 
 # Research links
 
-- (Use of resistor)[https://know.innon.com/bias-termination-rs485-network]
+- [Use of resistor](https://know.innon.com/bias-termination-rs485-network)
 
 # TODO
 
 - Make een functie in modbus process*modbus* die er voor zocht dat als de skip flag is gezet alle dat tot aan volgende server regel wordt gewist, de time out for resend wordt getriggerd, snifferque wordt gelegd
 
 - Clear sniffers on error, preventing data is invalid
+- Add support for P1 port, https://esphome.io/components/sensor/dsmr.html
+- Add support for ecos meter port
+
+- Port GP21 is led, blink on start
 
 # Issue
 

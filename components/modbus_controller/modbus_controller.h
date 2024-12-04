@@ -485,6 +485,7 @@ namespace esphome
       void loop() override;
       void setup() override;
       void update() override;
+      void resend() override;
 
       /// queues a modbus command in the send queue
       void queue_command(const ModbusCommandItem &command);
@@ -562,6 +563,7 @@ namespace esphome
       bool allow_duplicate_commands_;
       /// when was the last send operation
       uint32_t last_command_timestamp_;
+      uint32_t last_data_timestamp_;
       /// min time in ms between sending modbus commands
       uint16_t command_throttle_;
       /// if module didn't respond the last command

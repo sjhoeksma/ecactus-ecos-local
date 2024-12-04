@@ -71,6 +71,7 @@ namespace esphome
 
       ModbusRole role;
       ModbusMode sniffer_mode[MAX_MODBUS_ADDRESS_COUNT + 1];
+      uint16_t sniffer_count[MAX_MODBUS_ADDRESS_COUNT + 1];
 
     protected:
       GPIOPin *flow_control_pin_{nullptr};
@@ -83,10 +84,8 @@ namespace esphome
       uint32_t last_modbus_byte_{0};
       uint32_t last_send_{0};
       std::vector<ModbusDevice *> devices_;
-
-      uint16_t sniffer_count[MAX_MODBUS_ADDRESS_COUNT + 1];
-      // Time when we had the last not found
-      uint32_t last_not_found_{0};
+      // Time to block master
+      uint32_t master_timeout_{0};
     };
 
     class ModbusDevice
@@ -101,6 +100,7 @@ namespace esphome
       virtual bool is_sniffer() { return false; };
       virtual void clear_command_queue() {};
       virtual bool front_command_sniffer() { return false; };
+      virtual void resend() {};
       void send(uint8_t function, uint16_t start_address, uint16_t number_of_entities, uint8_t payload_len = 0,
                 const uint8_t *payload = nullptr)
       {
